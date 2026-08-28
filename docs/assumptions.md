@@ -67,15 +67,29 @@ any real-money, real-KYC, or real-MT5 phase.
 ## Environments
 
 - Local development targets Supabase's local stack (`supabase start`,
-  which requires Docker). The environment used to build this project has
-  neither Docker nor a running Postgres instance available, so live
-  database/E2E verification could not be executed here — see
-  `docs/testing/vertical-slice-report.md` for exactly what was verified
-  instead (type-check, lint, build, and DB-independent unit tests) and
-  what remains to be run locally.
-- Staging is assumed to be a password-protected Vercel preview or
-  similar, pointed at a separate Supabase project seeded with the same
-  deterministic demo data.
+  which requires Docker). The machine this project was built on has
+  neither Docker nor WSL, so local Supabase was never started; instead,
+  a hosted Supabase project (`aurion-markets-demo`) was created and used
+  for both local development and the deployed Vercel app — see
+  `docs/testing/vertical-slice-report.md` for what that let us verify
+  live (migrations, RLS, RBAC, auth, seeded data) versus what still
+  needs a real browser (Playwright) or Docker to fully close out.
+- Deployed to Vercel at https://forex-broker-platform.vercel.app,
+  connected to the `xerxesduane/forex-broker-platform` GitHub repo so
+  every push to `main` auto-deploys. This is currently acting as both
+  "staging" and the demo URL to share with a client — a real engagement
+  would split those, pointing staging at its own Supabase project rather
+  than reusing the demo one.
+- **Discovered constraint (via live testing):** Supabase's hosted Auth
+  rejects the reserved `.test` TLD on the public `/auth/v1/signup`
+  endpoint (`email_address_invalid`) — it validates the domain, not just
+  RFC format. The Admin API (`auth.admin.createUser`, used by
+  `supabase/seed/seed.ts`) is not subject to this, so the seeded
+  `@demo.aurion-markets.test` client accounts work fine; only a *fresh*
+  self-registration through the public `/register` form needs a
+  real-looking domain (`example.com` works). Local Supabase (via the
+  CLI) does not enforce this the same way, so this only surfaced once
+  tested against a real hosted project.
 
 ## Access and demo credentials
 

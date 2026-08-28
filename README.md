@@ -11,6 +11,15 @@ in `simulation` mode and every simulated value is visibly labeled as demo
 data in the UI. See `docs/product-plan.md` for scope and
 `docs/assumptions.md` for the working assumptions behind this build.
 
+## Live demo
+
+**https://forex-broker-platform.vercel.app** — deployed on Vercel,
+backed by a real hosted Supabase project (`aurion-markets-demo`), seeded
+with the demo accounts below. Auto-deploys on every push to `main`. See
+`docs/testing/vertical-slice-report.md` for exactly what has been
+verified live against this deployment (schema, RLS, RBAC, auth, seeded
+data) versus what's still pending a real-browser run.
+
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS v4
@@ -20,7 +29,7 @@ Zod · React Hook Form · Vitest · Playwright.
 ## Prerequisites
 
 - Node.js 20.9+ (this project was built with Node 24)
-- [Docker](https://www.docker.com/) — required by the Supabase CLI's local stack
+- Either [Docker](https://www.docker.com/) (to run Supabase fully locally via `supabase start`) **or** a free hosted Supabase project (no Docker needed — see below)
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (invoked here via `npx supabase`, no global install needed)
 
 ## Local setup
@@ -29,6 +38,17 @@ Zod · React Hook Form · Vitest · Playwright.
 npm install
 cp .env.example .env.local
 ```
+
+**No Docker available?** Create a free project at
+[supabase.com/dashboard](https://supabase.com/dashboard/new), then:
+```bash
+npx supabase login   # or set SUPABASE_ACCESS_TOKEN
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push   # applies every file in supabase/migrations/
+```
+Copy the project's URL/anon key/service_role key (Settings → API Keys)
+into `.env.local`, then skip to `npm run db:seed` below. This is exactly
+how the live demo's database (`aurion-markets-demo`) was set up.
 
 Start the local Supabase stack (Postgres, Auth, Storage, Studio) — this
 applies every migration in `supabase/migrations/` automatically:

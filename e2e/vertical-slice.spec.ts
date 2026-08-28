@@ -7,10 +7,22 @@ import { expect, test } from '@playwright/test'
  * analyst approval → demo MT5 account request/provisioning → dashboard →
  * admin timeline. Mirrors docs/product-plan.md section 7.
  *
- * Requires a local Supabase stack seeded via `npm run db:seed` (staff
- * accounts) and the app running against it — see README.md "Running the
- * vertical slice". Local Supabase has email confirmation disabled
- * (supabase/config.toml), so sign-up completes without an inbox step.
+ * Requires a Supabase stack seeded via `npm run db:seed` (staff accounts)
+ * and the app running against it — see README.md "Running the vertical
+ * slice". Local Supabase has email confirmation disabled
+ * (supabase/config.toml); a hosted project has it on by default, so a
+ * fresh registration in this spec only completes if confirmation is
+ * disabled for that project too (Authentication → Providers → Email →
+ * "Confirm email" off) or the confirmation email is handled out of band.
+ *
+ * Email domain note (found via live testing against a hosted project):
+ * Supabase's hosted Auth rejects the reserved `.test` TLD on the public
+ * signup endpoint (`email_address_invalid`) — it validates the domain,
+ * not just the format. `example.com` passes that check. The Admin API
+ * used by supabase/seed/seed.ts is not subject to this, which is why the
+ * seeded `@demo.aurion-markets.test` client accounts work fine; only a
+ * *fresh* self-registration through the public form needs a real-looking
+ * domain, hence `example.com` below rather than `.test`.
  */
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -21,7 +33,7 @@ const KYC_ANALYST_EMAIL = 'noah.whitfield@aurion-markets.example'
 const SUPER_ADMIN_EMAIL = 'ava.morgan@aurion-markets.example'
 
 function uniqueClientEmail() {
-  return `e2e.client.${Date.now()}@demo.aurion-markets.test`
+  return `e2e.client.${Date.now()}@example.com`
 }
 
 async function signOut(page: import('@playwright/test').Page) {
