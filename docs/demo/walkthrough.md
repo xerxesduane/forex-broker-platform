@@ -103,7 +103,10 @@ labelled as such in the interface, not just in the code.
 13. Open **Wallets & ledger**. At the top: the trial balance, with debits
     and credits equal. Below it, the chart of accounts and the individual
     entries — including your deposit, as a debit to clearing and a credit
-    to the client's wallet.
+    to the client's wallet. The entry list has an **Original postings /
+    Corrections** filter; both views are worth 10 seconds, because the
+    reason corrections pile up at the top is that nothing in the system
+    can edit a posted row.
 
 ### Act 4 — The control that matters (3 min)
 
@@ -135,6 +138,22 @@ broker CRM.
 pass or fail. It has never failed, because the only path into the ledger
 is a database function that refuses an unbalanced posting. Try it: the
 schema has no editable balance column to change.
+
+**The balance sheet shows its own residual.**
+`/admin/reports`, bottom card. Assets and expenses on one side; what the
+broker owes clients and has earned on the other. The last row is the gap
+between them, printed rather than asserted — a summary that can only ever
+claim to reconcile is worth less than one that shows the number.
+
+That card is also where two real bugs surfaced during this build. Both
+postings balanced perfectly and both described the wrong economics: the
+withdrawal payout had its legs reversed, so paying a client *increased*
+house cash; and commissions were booked against the bank rather than an
+expense account, so the broker appeared to get richer every time it paid
+a partner. Debits equalling credits proves arithmetic, not meaning. The
+fixes are in the ledger as compensating entries — visible under
+**Corrections** on `/admin/ledger` — because that is the only kind of fix
+the schema permits.
 
 **The audit log cannot be rewritten.**
 `/admin/audit`. UPDATE and DELETE on that table raise an exception at the

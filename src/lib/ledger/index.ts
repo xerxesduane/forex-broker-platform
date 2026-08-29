@@ -9,6 +9,7 @@ const SYSTEM_ACCOUNT_KEYS = {
   clearingDeposits: 'clearing_deposits_usd',
   clearingWithdrawals: 'clearing_withdrawals_usd',
   feeIncome: 'fee_income_usd',
+  brokerExpense: 'broker_expense_usd',
 } as const
 
 /**

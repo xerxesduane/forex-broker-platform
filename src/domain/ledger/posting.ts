@@ -10,10 +10,18 @@
  * written down once instead of being reinvented per server action.
  *
  * Sign conventions (standard accounting, applied consistently):
- *   client wallet  — liability to the client. Credit increases it.
- *   fee income     — income.               Credit increases it.
- *   house bank     — asset.                Debit increases it.
- *   clearing       — asset in transit.     Debit increases it.
+ *   client wallet      — liability to the client. Credit increases it.
+ *   withdrawals payable — liability.          Credit increases it.
+ *   fee income         — income.              Credit increases it.
+ *   house bank         — asset.               Debit increases it.
+ *   deposits clearing  — asset in transit.    Debit increases it.
+ *   broker expense     — expense.             Debit increases it.
+ *
+ * The expense account matters more than it looks. Anything the broker
+ * funds out of its own pocket — a partner commission, a client rebate, a
+ * goodwill credit — increases what it owes without any cash arriving.
+ * Booking the other leg against the house bank would balance perfectly
+ * while claiming the broker got *richer* every time it paid a partner.
  */
 import {
   add,
@@ -54,6 +62,7 @@ export type SystemLedgerAccounts = {
   clearingDeposits: string
   clearingWithdrawals: string
   feeIncome: string
+  brokerExpense: string
 }
 
 function debit(ledgerAccountId: string, amount: Money): PostingLeg {
@@ -161,17 +170,28 @@ export function buildWithdrawalReservationPosting(input: {
   })
 }
 
-/** The payout actually leaves the house: clearing drains to the bank. */
+/**
+ * The payout actually leaves the house.
+ *
+ * The request already moved the money out of the client's wallet and into
+ * withdrawals payable. Paying it discharges that payable and reduces the
+ * broker's own cash — so the payable is debited and the bank is credited.
+ *
+ * The two legs were previously the other way round, which balanced (and so
+ * passed every check) while describing the opposite economics: it grew the
+ * house bank each time a client was paid, and drove the payable further
+ * negative. Balanced is not the same as correct.
+ */
 export function buildWithdrawalPayoutPosting(input: {
   system: SystemLedgerAccounts
   netAmount: Money
 }): Result<Posting, PostingError> {
   return validatePosting({
     currency: input.netAmount.currency,
-    memo: 'Withdrawal paid — withdrawals clearing to house bank',
+    memo: 'Withdrawal paid — payable discharged, cash leaves the house bank',
     legs: [
-      debit(input.system.houseBank, input.netAmount),
-      credit(input.system.clearingWithdrawals, input.netAmount),
+      debit(input.system.clearingWithdrawals, input.netAmount),
+      credit(input.system.houseBank, input.netAmount),
     ],
   })
 }
@@ -203,7 +223,12 @@ export function buildInternalTransferPosting(input: {
   })
 }
 
-/** IB commission: paid out of house funds into the partner's wallet. */
+/**
+ * IB commission credited to the partner's wallet.
+ *
+ * No cash moves: the partner's balance goes up, and the broker recognises
+ * the cost. Cash only leaves later, if the partner withdraws.
+ */
 export function buildCommissionPayoutPosting(input: {
   ibLedgerAccountId: string
   system: SystemLedgerAccounts
@@ -211,15 +236,15 @@ export function buildCommissionPayoutPosting(input: {
 }): Result<Posting, PostingError> {
   return validatePosting({
     currency: input.amount.currency,
-    memo: 'Introducing broker commission paid to partner wallet',
+    memo: 'Introducing broker commission credited to partner wallet',
     legs: [
-      debit(input.system.houseBank, input.amount),
+      debit(input.system.brokerExpense, input.amount),
       credit(input.ibLedgerAccountId, input.amount),
     ],
   })
 }
 
-/** Client rebate: also house-funded, into the client's own wallet. */
+/** Client rebate: broker-funded, into the client's own wallet. */
 export function buildRebatePosting(input: {
   clientLedgerAccountId: string
   system: SystemLedgerAccounts
@@ -229,7 +254,7 @@ export function buildRebatePosting(input: {
     currency: input.amount.currency,
     memo: 'Client rebate credited',
     legs: [
-      debit(input.system.houseBank, input.amount),
+      debit(input.system.brokerExpense, input.amount),
       credit(input.clientLedgerAccountId, input.amount),
     ],
   })
@@ -246,15 +271,18 @@ export function buildManualAdjustmentPosting(input: {
   amount: Money
   direction: 'credit_client' | 'debit_client'
 }): Result<Posting, PostingError> {
+  // A goodwill credit costs the broker; a correction recovers that cost.
+  // Either way the counterparty is the expense account, not the bank —
+  // no cash moves when a wallet balance is adjusted.
   const legs =
     input.direction === 'credit_client'
       ? [
-          debit(input.system.houseBank, input.amount),
+          debit(input.system.brokerExpense, input.amount),
           credit(input.clientLedgerAccountId, input.amount),
         ]
       : [
           debit(input.clientLedgerAccountId, input.amount),
-          credit(input.system.houseBank, input.amount),
+          credit(input.system.brokerExpense, input.amount),
         ]
 
   return validatePosting({

@@ -18,6 +18,16 @@
  * See docs/product-plan.md "Demonstration data" and docs/assumptions.md.
  */
 import { randomInt, randomUUID } from 'node:crypto'
+import {
+  buildCommissionPayoutPosting,
+  buildDepositPosting,
+  buildInternalTransferPosting,
+  buildRebatePosting,
+  buildWithdrawalPayoutPosting,
+  buildWithdrawalReservationPosting,
+  type Posting,
+} from '@/domain/ledger/posting'
+import { fromMajorUnits } from '@/domain/shared/money'
 import { createAdminClient } from './lib/admin-client'
 import {
   CLIENT_SEED,
@@ -90,6 +100,36 @@ function reference(prefix: string) {
   return `${prefix}-${randomUUID().slice(0, 8).toUpperCase()}`
 }
 
+const usd = (amount: number) => fromMajorUnits(amount, 'USD')
+
+/**
+ * Post a `Posting` produced by the domain builders.
+ *
+ * The seed used to spell its legs out by hand, which is exactly how two
+ * postings came to describe the wrong economics while still balancing:
+ * the builders were corrected and this file kept its own stale copy. Now
+ * there is one definition of each movement's shape, and the seed exercises
+ * the same code the server actions do.
+ */
+async function post(input: {
+  type: string
+  built: ReturnType<typeof buildDepositPosting>
+  externalRef: string
+  occurredAt: Date
+}): Promise<string> {
+  if (!input.built.ok) {
+    throw new Error(`Posting rejected (${input.externalRef}): ${input.built.error.message}`)
+  }
+  const posting: Posting = input.built.value
+  return postTransaction({
+    type: input.type,
+    currency: posting.currency,
+    legs: posting.legs,
+    externalRef: input.externalRef,
+    occurredAt: input.occurredAt,
+  })
+}
+
 /** The only path into the ledger — same gateway the application uses. */
 async function postTransaction(input: {
   type: string
@@ -122,6 +162,7 @@ type SystemAccounts = {
   clearingDeposits: string
   clearingWithdrawals: string
   feeIncome: string
+  brokerExpense: string
 }
 
 async function loadSystemAccounts(): Promise<SystemAccounts> {
@@ -137,6 +178,7 @@ async function loadSystemAccounts(): Promise<SystemAccounts> {
     clearingDeposits: 'clearing_deposits_usd',
     clearingWithdrawals: 'clearing_withdrawals_usd',
     feeIncome: 'fee_income_usd',
+    brokerExpense: 'broker_expense_usd',
   } as const
 
   const resolved: Partial<SystemAccounts> = {}
@@ -672,13 +714,13 @@ async function seedMoneyMovement(
       const method = DEPOSIT_METHOD_KEYS[randomInt(0, DEPOSIT_METHOD_KEYS.length - 1)]!
       const referenceCode = reference('DEP')
 
-      const transactionId = await postTransaction({
+      const transactionId = await post({
         type: 'deposit',
-        currency: 'USD',
-        legs: [
-          { ledgerAccountId: system.clearingDeposits, direction: 'debit', amount },
-          { ledgerAccountId: client.ledgerAccountId, direction: 'credit', amount },
-        ],
+        built: buildDepositPosting({
+          clientLedgerAccountId: client.ledgerAccountId,
+          system,
+          amount: usd(amount),
+        }),
         externalRef: referenceCode,
         occurredAt: at,
       })
@@ -791,14 +833,14 @@ async function seedMoneyMovement(
 
     // The reservation posting happens at request time, whatever the
     // outcome — that is what stops a balance being spent twice.
-    const reservationId = await postTransaction({
+    const reservationId = await post({
       type: 'withdrawal',
-      currency: 'USD',
-      legs: [
-        { ledgerAccountId: client.ledgerAccountId, direction: 'debit', amount },
-        { ledgerAccountId: system.clearingWithdrawals, direction: 'credit', amount: net },
-        { ledgerAccountId: system.feeIncome, direction: 'credit', amount: fee },
-      ],
+      built: buildWithdrawalReservationPosting({
+        clientLedgerAccountId: client.ledgerAccountId,
+        system,
+        grossAmount: usd(amount),
+        fee: usd(fee),
+      }),
       externalRef: referenceCode,
       occurredAt: at,
     })
@@ -814,13 +856,9 @@ async function seedMoneyMovement(
     }
 
     if (status === 'paid') {
-      await postTransaction({
+      await post({
         type: 'withdrawal',
-        currency: 'USD',
-        legs: [
-          { ledgerAccountId: system.houseBank, direction: 'debit', amount: net },
-          { ledgerAccountId: system.clearingWithdrawals, direction: 'credit', amount: net },
-        ],
+        built: buildWithdrawalPayoutPosting({ system, netAmount: usd(net) }),
         externalRef: `${referenceCode} payout`,
         occurredAt: new Date(at.getTime() + 86_400_000),
       })
@@ -968,13 +1006,23 @@ async function seedMoneyMovement(
     const at = daysAgo(11)
     const amount = 250
     const transferId = randomUUID()
-    const transactionId = await postTransaction({
+    // Read the sender's balance back out of the ledger rather than
+    // assuming it — the transfer builder refuses to overdraw a wallet, and
+    // that check is worth exercising here too.
+    const { data: senderBalance } = await admin
+      .from('ledger_account_balances')
+      .select('balance')
+      .eq('ledger_account_id', sender.ledgerAccountId)
+      .single()
+
+    const transactionId = await post({
       type: 'internal_transfer',
-      currency: 'USD',
-      legs: [
-        { ledgerAccountId: sender.ledgerAccountId, direction: 'debit', amount },
-        { ledgerAccountId: recipient.ledgerAccountId, direction: 'credit', amount },
-      ],
+      built: buildInternalTransferPosting({
+        fromLedgerAccountId: sender.ledgerAccountId,
+        toLedgerAccountId: recipient.ledgerAccountId,
+        amount: usd(amount),
+        availableBalance: usd(Number(senderBalance?.balance ?? 0)),
+      }),
       externalRef: `TRF-${transferId.slice(0, 8).toUpperCase()}`,
       occurredAt: at,
     })
@@ -1151,17 +1199,13 @@ async function seedGrowth(
     if (!partnerClient) continue
 
     const paidAt = new Date(commission.at.getTime() + 7 * 86_400_000)
-    const transactionId = await postTransaction({
+    const transactionId = await post({
       type: 'commission',
-      currency: 'USD',
-      legs: [
-        { ledgerAccountId: system.houseBank, direction: 'debit', amount: commission.amount },
-        {
-          ledgerAccountId: partnerClient.ledgerAccountId,
-          direction: 'credit',
-          amount: commission.amount,
-        },
-      ],
+      built: buildCommissionPayoutPosting({
+        ibLedgerAccountId: partnerClient.ledgerAccountId,
+        system,
+        amount: usd(commission.amount),
+      }),
       externalRef: `Commission payout to ${partnerClient.referralCode}`,
       occurredAt: paidAt,
     })
@@ -1204,13 +1248,13 @@ async function seedGrowth(
 
     if (rebate && status === 'paid') {
       const paidAt = new Date(deposit.at.getTime() + 5 * 86_400_000)
-      const transactionId = await postTransaction({
+      const transactionId = await post({
         type: 'rebate',
-        currency: 'USD',
-        legs: [
-          { ledgerAccountId: system.houseBank, direction: 'debit', amount },
-          { ledgerAccountId: deposit.client.ledgerAccountId, direction: 'credit', amount },
-        ],
+        built: buildRebatePosting({
+          clientLedgerAccountId: deposit.client.ledgerAccountId,
+          system,
+          amount: usd(amount),
+        }),
         externalRef: 'Client rebate',
         occurredAt: paidAt,
       })

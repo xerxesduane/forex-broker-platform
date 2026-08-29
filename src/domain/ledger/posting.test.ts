@@ -16,6 +16,7 @@ const SYSTEM: SystemLedgerAccounts = {
   clearingDeposits: 'clearing-deposits-id',
   clearingWithdrawals: 'clearing-withdrawals-id',
   feeIncome: 'fee-income-id',
+  brokerExpense: 'broker-expense-id',
 }
 
 const CLIENT = 'client-wallet-id'
@@ -149,11 +150,42 @@ describe('buildWithdrawalReservationPosting', () => {
 })
 
 describe('buildWithdrawalPayoutPosting', () => {
-  it('drains clearing into the house bank', () => {
+  it('discharges the payable and takes the cash out of the house bank', () => {
     const result = buildWithdrawalPayoutPosting({ system: SYSTEM, netAmount: usd(495) })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(totals(result.value.legs)).toEqual({ debits: 495, credits: 495 })
+
+    // Direction matters as much as balance here: paying a client must
+    // reduce the broker's cash, not increase it.
+    expect(result.value.legs).toContainEqual({
+      ledgerAccountId: SYSTEM.clearingWithdrawals,
+      direction: 'debit',
+      amount: 495,
+    })
+    expect(result.value.legs).toContainEqual({
+      ledgerAccountId: SYSTEM.houseBank,
+      direction: 'credit',
+      amount: 495,
+    })
+  })
+
+  it('nets the payable back to zero across request and payout', () => {
+    // Request reserves 500 gross: 495 to the payable, 5 to fee income.
+    const reservation = buildWithdrawalReservationPosting({
+      clientLedgerAccountId: CLIENT,
+      system: SYSTEM,
+      grossAmount: usd(500),
+      fee: usd(5),
+    })
+    const payout = buildWithdrawalPayoutPosting({ system: SYSTEM, netAmount: usd(495) })
+    if (!reservation.ok || !payout.ok) throw new Error('expected both postings to build')
+
+    const payableMovement = [...reservation.value.legs, ...payout.value.legs]
+      .filter((leg) => leg.ledgerAccountId === SYSTEM.clearingWithdrawals)
+      .reduce((net, leg) => net + (leg.direction === 'credit' ? leg.amount : -leg.amount), 0)
+
+    expect(payableMovement).toBe(0)
   })
 })
 
@@ -194,7 +226,7 @@ describe('buildInternalTransferPosting', () => {
 })
 
 describe('buildCommissionPayoutPosting', () => {
-  it('pays a partner out of house funds', () => {
+  it('books the cost as an expense, not as cash arriving', () => {
     const result = buildCommissionPayoutPosting({
       ibLedgerAccountId: 'ib-wallet',
       system: SYSTEM,
@@ -202,11 +234,32 @@ describe('buildCommissionPayoutPosting', () => {
     })
     expect(result.ok).toBe(true)
     if (!result.ok) return
+
     expect(totals(result.value.legs)).toEqual({ debits: 22.5, credits: 22.5 })
+    expect(result.value.legs).toContainEqual({
+      ledgerAccountId: SYSTEM.brokerExpense,
+      direction: 'debit',
+      amount: 22.5,
+    })
+    // Crediting a partner must never touch the bank — no cash has moved.
+    expect(result.value.legs.some((leg) => leg.ledgerAccountId === SYSTEM.houseBank)).toBe(false)
   })
 })
 
 describe('buildManualAdjustmentPosting', () => {
+  it('never books an adjustment against the bank', () => {
+    const result = buildManualAdjustmentPosting({
+      clientLedgerAccountId: CLIENT,
+      system: SYSTEM,
+      amount: usd(50),
+      direction: 'credit_client',
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.legs.some((leg) => leg.ledgerAccountId === SYSTEM.houseBank)).toBe(false)
+    expect(result.value.legs.some((leg) => leg.ledgerAccountId === SYSTEM.brokerExpense)).toBe(true)
+  })
+
   it('balances in both directions', () => {
     for (const direction of ['credit_client', 'debit_client'] as const) {
       const result = buildManualAdjustmentPosting({
