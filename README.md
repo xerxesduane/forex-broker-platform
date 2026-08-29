@@ -1,9 +1,16 @@
 # Aurion Markets — Forex Brokerage Demonstration Platform
 
 A private demonstration platform for a Forex brokerage: a public marketing
-site, a guided client portal, and a queue-oriented admin portal, backed by
-an immutable double-entry ledger foundation and simulated external
-integrations (MT5, KYC provider, payments, email, SMS, document storage).
+site, a guided client portal, and a queue-oriented admin console, backed by
+an immutable double-entry ledger and simulated external integrations (MT5,
+KYC provider, payments, email, SMS, document storage).
+
+Working end to end: registration, identity verification, wallet funding,
+withdrawals with maker-checker approval, internal transfers, demo and live
+MT5 account provisioning, an Introducing Broker programme with commissions
+and rebates, support ticketing, staff and role administration, platform
+settings that genuinely drive behaviour, reporting, and an audit trail the
+database itself refuses to rewrite.
 
 **This is a demo, not a production system.** No real money, no real
 identity documents, no production MT5 connection — every integration runs
@@ -15,10 +22,15 @@ data in the UI. See `docs/product-plan.md` for scope and
 
 **https://forex-broker-platform.vercel.app** — deployed on Vercel,
 backed by a real hosted Supabase project (`aurion-markets-demo`), seeded
-with the demo accounts below. Auto-deploys on every push to `main`. See
-`docs/testing/vertical-slice-report.md` for exactly what has been
-verified live against this deployment (schema, RLS, RBAC, auth, seeded
-data) versus what's still pending a real-browser run.
+with the demo accounts below. Auto-deploys on every push to `main`.
+
+**Showing this to someone? Start with
+[`docs/demo/walkthrough.md`](docs/demo/walkthrough.md)** — a 15-minute
+script (with a 5-minute version), the full credential list, and a precise
+statement of what is simulated and what is not.
+
+`docs/testing/vertical-slice-report.md` records what has been verified
+live against this deployment versus what still needs a real-browser run.
 
 ## Stack
 
@@ -97,22 +109,43 @@ is set in `.env.local`, so it can't fire by accident.
 
 Password for every seeded account: `AurionDemo!2026`
 
-| Role                                                | Email                                      |
-| --------------------------------------------------- | ------------------------------------------ |
-| Super administrator                                 | `ava.morgan@aurion-markets.example`        |
-| KYC analyst                                         | `noah.whitfield@aurion-markets.example`    |
-| Finance operator                                    | `priya.desai@aurion-markets.example`       |
-| Finance approver                                    | `marcus.oyelaran@aurion-markets.example`   |
-| Support agent                                       | `lena.brooks@aurion-markets.example`       |
-| Client — not started                                | `jordan.ellery@demo.aurion-markets.test`   |
-| Client — KYC in review                              | `priti.nakamura@demo.aurion-markets.test`  |
-| Client — KYC approved, has a demo account           | `samuel.reyes@demo.aurion-markets.test`    |
-| Client — KYC approved, has a "real" account request | `imogen.hale@demo.aurion-markets.test`     |
-| Client — KYC rejected                               | `daniel.kowalski@demo.aurion-markets.test` |
-
 Staff sign in at `/login` and land in `/admin`; clients land in `/portal`.
+Each staff role sees a different console, because the navigation and the
+actions are driven by the same permission checks the server enforces.
 
-## Running the vertical slice manually
+### Staff
+
+| Role                | Email                                    | Sees                                             |
+| ------------------- | ---------------------------------------- | ------------------------------------------------ |
+| Super administrator | `ava.morgan@aurion-markets.example`      | Everything                                       |
+| KYC analyst         | `noah.whitfield@aurion-markets.example`  | Verification queue only — no money, no settings  |
+| Finance operator    | `priya.desai@aurion-markets.example`     | Money movement, read and prepare; cannot approve |
+| Head of finance     | `marcus.oyelaran@aurion-markets.example` | Approves money movement, posts adjustments       |
+| Finance approver    | `yuki.tanaka@aurion-markets.example`     | The second signature on a large withdrawal       |
+| Support agent       | `lena.brooks@aurion-markets.example`     | Tickets and client context only                  |
+| Trading operations  | `tomas.iversen@aurion-markets.example`   | Account provisioning and lifecycle               |
+| Partnerships        | `sofia.marchetti@aurion-markets.example` | Partners, commissions, rebates                   |
+| Administrator       | `rachel.okonkwo@aurion-markets.example`  | Staff, roles, settings, integrations             |
+| Auditor             | `henry.laurent@aurion-markets.example`   | Read-only across everything                      |
+
+### Clients
+
+| State                                       | Email                                       |
+| ------------------------------------------- | ------------------------------------------- |
+| Verified and funded — the fullest picture   | `samuel.reyes@demo.aurion-markets.test`     |
+| Large withdrawal held for a second approver | `aisha.rahman@demo.aurion-markets.test`     |
+| Active Introducing Broker with a downline   | `imogen.hale@demo.aurion-markets.test`      |
+| Verification sent back for more information | `grace.oyelowo@demo.aurion-markets.test`    |
+| Restricted account — funding blocked        | `viktor.ostrovsky@demo.aurion-markets.test` |
+| Verification in review                      | `priti.nakamura@demo.aurion-markets.test`   |
+| Verification rejected                       | `daniel.kowalski@demo.aurion-markets.test`  |
+| Brand new, nothing started                  | `jordan.ellery@demo.aurion-markets.test`    |
+
+## Running the core journey manually
+
+The full script, including money movement and the maker-checker control,
+is in [`docs/demo/walkthrough.md`](docs/demo/walkthrough.md). The original
+onboarding slice, still accurate:
 
 1. Visit `/register`, sign up with a fresh email (local Supabase has email
    confirmation disabled, so you're taken straight to sign-in).
