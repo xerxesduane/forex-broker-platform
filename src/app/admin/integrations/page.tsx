@@ -15,15 +15,19 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const ADAPTERS = ['mt5', 'kyc_provider', 'document_storage', 'payments', 'email', 'sms'] as const
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminIntegrationsPage() {
   const supabase = await createSupabaseServerClient()
   await requirePermission(supabase, PERMISSIONS.INTEGRATION_VIEW)
 
   const { data: events } = await supabase
     .from('integration_events')
-    .select('id, adapter, event_type, status, simulation, created_at, error_message')
+    .select(
+      'id, adapter, event_type, status, simulation, created_at, completed_at, error_message, idempotency_key',
+    )
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(80)
 
   const summaries = ADAPTERS.map((adapter) => {
     const adapterEvents = (events ?? []).filter((e) => e.adapter === adapter)
@@ -37,8 +41,10 @@ export default async function AdminIntegrationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Integration status</h1>
-          <p className="text-muted-foreground mt-1">
-            Every adapter call is recorded here (ADR 0005).
+          <p className="text-muted-foreground mt-1 max-w-2xl">
+            Every call through every adapter writes a row here, with its idempotency key — so a
+            retry can be told apart from a duplicate, and any provider interaction can be reconciled
+            after the fact. No adapter in this build talks to a real provider.
           </p>
         </div>
         <Badge variant="outline" className="uppercase">

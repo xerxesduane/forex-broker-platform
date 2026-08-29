@@ -2,34 +2,59 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AuditTimeline, type AuditEventRow } from '@/components/admin/audit-timeline'
 import { KycDecisionForm } from '@/components/admin/kyc-decision-form'
-import { KycStatusBadge } from '@/components/status-badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  ClaimCaseButton,
+  DocumentReviewButtons,
+  RequestRevisionDialog,
+  RiskFlagPicker,
+} from '@/components/admin/kyc-review-tools'
+import { KycStatusBadge, SimulatedBadge } from '@/components/status-badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PERMISSIONS } from '@/domain/rbac/permissions'
 import { isTerminalKycStatus } from '@/domain/kyc/state-machine'
 import { hasPermission, requirePermission } from '@/lib/rbac/require-permission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-export default async function AdminKycCaseDetailPage(props: PageProps<'/admin/kyc/[id]'>) {
-  const { id } = await props.params
+export const dynamic = 'force-dynamic'
+
+export default async function AdminKycCaseDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
   const supabase = await createSupabaseServerClient()
   await requirePermission(supabase, PERMISSIONS.KYC_VIEW)
-  const canDecide = await hasPermission(supabase, PERMISSIONS.KYC_DECIDE)
+  const [canDecide, canReview] = await Promise.all([
+    hasPermission(supabase, PERMISSIONS.KYC_DECIDE),
+    hasPermission(supabase, PERMISSIONS.KYC_REVIEW),
+  ])
 
   const { data: kycCase } = await supabase
     .from('kyc_cases')
     .select(
-      'id, client_id, status, employment_status, source_of_funds, declared_country, submitted_at, decided_at, decision_reason, profiles!client_id(first_name, last_name, email, country_of_residence, phone_number)',
+      'id, client_id, status, employment_status, source_of_funds, declared_country, submitted_at, decided_at, decision_reason, analyst_id, claimed_at, risk_flags, profiles!client_id(first_name, last_name, email, country_of_residence, phone_number)',
     )
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (!kycCase) notFound()
 
   const client = Array.isArray(kycCase.profiles) ? kycCase.profiles[0] : kycCase.profiles
 
+  const { data: analyst } = kycCase.analyst_id
+    ? await supabase
+        .from('profiles')
+        .select('first_name, last_name, email')
+        .eq('id', kycCase.analyst_id)
+        .maybeSingle()
+    : { data: null }
+
   const { data: documents } = await supabase
     .from('kyc_documents')
-    .select('id, doc_type, original_filename, content_type, size_bytes, uploaded_at')
+    .select(
+      'id, doc_type, original_filename, content_type, size_bytes, uploaded_at, review_status, review_note',
+    )
     .eq('kyc_case_id', id)
 
   const { data: auditEvents } = await supabase
@@ -41,9 +66,11 @@ export default async function AdminKycCaseDetailPage(props: PageProps<'/admin/ky
     .eq('entity_id', id)
     .order('created_at', { ascending: false })
 
+  const unclaimed = !kycCase.analyst_id && !isTerminalKycStatus(kycCase.status)
+
   return (
     <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {client?.first_name} {client?.last_name}
@@ -57,8 +84,21 @@ export default async function AdminKycCaseDetailPage(props: PageProps<'/admin/ky
             </Link>{' '}
             · {client?.email}
           </p>
+          {analyst ? (
+            <p className="text-muted-foreground mt-1 text-sm">
+              Claimed by{' '}
+              {`${analyst.first_name ?? ''} ${analyst.last_name ?? ''}`.trim() || analyst.email}
+              {kycCase.claimed_at ? ` on ${new Date(kycCase.claimed_at).toLocaleString()}` : ''}
+            </p>
+          ) : null}
         </div>
-        <KycStatusBadge status={kycCase.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <KycStatusBadge status={kycCase.status} />
+          {canReview && unclaimed ? <ClaimCaseButton kycCaseId={kycCase.id} /> : null}
+          {canReview && !isTerminalKycStatus(kycCase.status) ? (
+            <RequestRevisionDialog kycCaseId={kycCase.id} />
+          ) : null}
+        </div>
       </div>
 
       <Card>
@@ -84,29 +124,62 @@ export default async function AdminKycCaseDetailPage(props: PageProps<'/admin/ky
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Documents</CardTitle>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Documents</CardTitle>
+            <CardDescription>
+              Metadata only — no real identity document is ever collected in this build.
+            </CardDescription>
+          </div>
+          <SimulatedBadge />
         </CardHeader>
         <CardContent>
           {!documents || documents.length === 0 ? (
             <p className="text-muted-foreground text-sm">No documents attached.</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ul className="divide-y text-sm">
               {documents.map((doc) => (
-                <li key={doc.id} className="flex justify-between">
-                  <span>
-                    {doc.original_filename}{' '}
-                    <span className="text-muted-foreground">({doc.doc_type})</span>
-                  </span>
-                  <span className="text-muted-foreground">
-                    {(doc.size_bytes / 1024).toFixed(0)} KB
-                  </span>
+                <li key={doc.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate">
+                      {doc.original_filename}{' '}
+                      <span className="text-muted-foreground">({doc.doc_type})</span>
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {(doc.size_bytes / 1024).toFixed(0)} KB
+                      {doc.review_note ? ` · ${doc.review_note}` : ''}
+                    </p>
+                  </div>
+                  {canReview && !isTerminalKycStatus(kycCase.status) ? (
+                    <DocumentReviewButtons
+                      documentId={doc.id}
+                      reviewStatus={doc.review_status ?? 'pending'}
+                    />
+                  ) : (
+                    <span className="text-muted-foreground text-xs capitalize">
+                      {doc.review_status ?? 'pending'}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </CardContent>
       </Card>
+
+      {canReview ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Internal risk flags</CardTitle>
+            <CardDescription>
+              Staff-only context for the decision. Never shown to the client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RiskFlagPicker kycCaseId={kycCase.id} flags={(kycCase.risk_flags ?? []) as string[]} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {!isTerminalKycStatus(kycCase.status) && canDecide && (
         <Card>

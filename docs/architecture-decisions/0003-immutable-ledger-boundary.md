@@ -37,7 +37,7 @@ inbound/outbound adapter call so a retried webhook cannot double-post.
 ## Consequences
 
 - Slice 1 does not implement money movement, so this ADR mostly commits
-  the *schema shape* (`ledger_entries`, `transactions`, `wallets` as
+  the _schema shape_ (`ledger_entries`, `transactions`, `wallets` as
   foundation tables) rather than working code. This is intentional: the
   boundary must exist before any feature is built against it, so a later
   phase cannot "temporarily" bypass it under deadline pressure.

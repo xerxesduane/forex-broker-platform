@@ -5,11 +5,32 @@ import { PERMISSIONS } from '@/domain/rbac/permissions'
 import { requirePermission } from '@/lib/rbac/require-permission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-const ENTITY_TYPES = ['all', 'profile', 'kyc_case', 'trading_account'] as const
+const ENTITY_TYPES = [
+  'all',
+  'profile',
+  'kyc_case',
+  'kyc_document',
+  'trading_account',
+  'deposit',
+  'withdrawal',
+  'transaction',
+  'internal_transfer',
+  'support_ticket',
+  'commission',
+  'introducing_broker',
+  'role',
+  'platform_setting',
+] as const
 
-export default async function AdminAuditLogPage(props: PageProps<'/admin/audit'>) {
-  const searchParams = await props.searchParams
-  const entityTypeParam = searchParams.entityType
+export const dynamic = 'force-dynamic'
+
+export default async function AdminAuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ entityType?: string | string[] }>
+}) {
+  const params = await searchParams
+  const entityTypeParam = params.entityType
   const entityType = Array.isArray(entityTypeParam) ? entityTypeParam[0] : entityTypeParam
   const activeFilter = ENTITY_TYPES.includes(entityType as (typeof ENTITY_TYPES)[number])
     ? (entityType as (typeof ENTITY_TYPES)[number])
@@ -36,7 +57,11 @@ export default async function AdminAuditLogPage(props: PageProps<'/admin/audit'>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-        <p className="text-muted-foreground mt-1">Append-only evidence across every domain.</p>
+        <p className="text-muted-foreground mt-1 max-w-2xl">
+          Append-only evidence across every domain. The database refuses UPDATE and DELETE on this
+          table outright — not by omitting a policy, but with a trigger that raises, so even the
+          service role cannot rewrite history.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">

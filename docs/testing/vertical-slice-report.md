@@ -21,12 +21,21 @@ database — that gap is now substantially closed.
 
 ### Build-time checks (unchanged from before, still green)
 
-| Check | Result |
-|---|---|
-| `npm run typecheck` | Pass, 0 errors |
-| `npm run lint` | Pass, 0 errors, 4 informational warnings |
-| `npm test` | Pass, 32/32 unit tests |
-| `npm run build` | Pass, correct static/dynamic route split |
+| Check               | Result                                   |
+| ------------------- | ---------------------------------------- |
+| `npm run typecheck` | Pass, 0 errors                           |
+| `npm run lint`      | Pass, 0 errors, 5 informational warnings |
+| `npm test`          | Pass, 166/166 unit tests                 |
+| `npm run build`     | Pass, correct static/dynamic route split |
+
+> Updated after the full-platform build. The unit suite grew from 32 to
+> 166 as the domain layer expanded: money arithmetic, double-entry posting
+> builders, the deposit/withdrawal state machines and the maker-checker
+> rule, ticket transitions, commission and rank calculation, TOTP against
+> the RFC 4226/6238 test vectors, and a QR encoder verified by decoding
+> its own output. The remaining lint warnings are React Compiler notices
+> about React Hook Form's `watch()`, which is a known incompatible-library
+> pattern rather than a defect.
 
 ### Live checks against the hosted database (new)
 

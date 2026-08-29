@@ -85,7 +85,7 @@ any real-money, real-KYC, or real-MT5 phase.
   endpoint (`email_address_invalid`) — it validates the domain, not just
   RFC format. The Admin API (`auth.admin.createUser`, used by
   `supabase/seed/seed.ts`) is not subject to this, so the seeded
-  `@demo.aurion-markets.test` client accounts work fine; only a *fresh*
+  `@demo.aurion-markets.test` client accounts work fine; only a _fresh_
   self-registration through the public `/register` form needs a
   real-looking domain (`example.com` works). Local Supabase (via the
   CLI) does not enforce this the same way, so this only surfaced once

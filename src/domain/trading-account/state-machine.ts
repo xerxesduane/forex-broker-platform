@@ -12,7 +12,7 @@ const TRANSITIONS: Record<
   TradingAccountStatus,
   Partial<Record<TradingAccountEvent['type'], TradingAccountStatus>>
 > = {
-  requested: { START_PROVISIONING: 'provisioning' },
+  requested: { START_PROVISIONING: 'provisioning', REJECT_REQUEST: 'rejected' },
   provisioning: { PROVISION_SUCCEEDED: 'active', PROVISION_FAILED: 'rejected' },
   active: { SUSPEND: 'suspended', CLOSE: 'closed' },
   suspended: { REACTIVATE: 'active', CLOSE: 'closed' },

@@ -5,3 +5,8 @@ playwright-report
 test-results
 supabase/.branches
 supabase/.temp
+
+# Instruction files. Prettier reflows their prose and de-indents list
+# continuations, which changes what the instructions actually say.
+CLAUDE.md
+AGENTS.md

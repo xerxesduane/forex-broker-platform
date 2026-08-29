@@ -69,3 +69,83 @@ export function DemoDataBadge({ className }: { className?: string }) {
     </Badge>
   )
 }
+
+const MONEY_MOVEMENT_STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: 'Pending', tone: 'info' },
+  confirmed: { label: 'Confirmed', tone: 'warning' },
+  approved: { label: 'Approved', tone: 'success' },
+  paid: { label: 'Paid', tone: 'success' },
+  rejected: { label: 'Rejected', tone: 'danger' },
+  failed: { label: 'Failed', tone: 'danger' },
+  reversed: { label: 'Reversed', tone: 'neutral' },
+}
+
+const TICKET_STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  open: { label: 'Open', tone: 'info' },
+  pending: { label: 'Awaiting client', tone: 'warning' },
+  resolved: { label: 'Resolved', tone: 'success' },
+  closed: { label: 'Closed', tone: 'neutral' },
+}
+
+const PRIORITY_META: Record<string, { label: string; tone: Tone }> = {
+  low: { label: 'Low', tone: 'neutral' },
+  medium: { label: 'Medium', tone: 'info' },
+  high: { label: 'High', tone: 'danger' },
+}
+
+const REWARD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: 'Pending', tone: 'info' },
+  approved: { label: 'Approved', tone: 'warning' },
+  paid: { label: 'Paid', tone: 'success' },
+  void: { label: 'Void', tone: 'neutral' },
+}
+
+const CLIENT_STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  active: { label: 'Active', tone: 'success' },
+  restricted: { label: 'Restricted', tone: 'warning' },
+  suspended: { label: 'Suspended', tone: 'danger' },
+  closed: { label: 'Closed', tone: 'neutral' },
+}
+
+const RISK_META: Record<string, { label: string; tone: Tone }> = {
+  low: { label: 'Low risk', tone: 'success' },
+  medium: { label: 'Medium risk', tone: 'warning' },
+  high: { label: 'High risk', tone: 'danger' },
+}
+
+const IB_STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: 'Awaiting review', tone: 'info' },
+  active: { label: 'Active', tone: 'success' },
+  suspended: { label: 'Suspended', tone: 'danger' },
+}
+
+function makeBadge(meta: Record<string, { label: string; tone: Tone }>) {
+  return function StatusBadge({ status, className }: { status: string; className?: string }) {
+    const entry = meta[status] ?? { label: status, tone: 'neutral' as Tone }
+    return <StatusBadgeBase label={entry.label} tone={entry.tone} className={className} />
+  }
+}
+
+export const MoneyMovementStatusBadge = makeBadge(MONEY_MOVEMENT_STATUS_META)
+export const TicketStatusBadge = makeBadge(TICKET_STATUS_META)
+export const PriorityBadge = makeBadge(PRIORITY_META)
+export const RewardStatusBadge = makeBadge(REWARD_STATUS_META)
+export const ClientStatusBadge = makeBadge(CLIENT_STATUS_META)
+export const RiskBadge = makeBadge(RISK_META)
+export const IbStatusBadge = makeBadge(IB_STATUS_META)
+
+/**
+ * Marks a value that came from a simulated adapter rather than a real
+ * provider. Used next to MT5 logins, provider references and balances —
+ * every simulated value has to be visibly labelled, not just commented.
+ */
+export function SimulatedBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn('border-dashed text-[10px] font-normal tracking-wide uppercase', className)}
+    >
+      Simulated
+    </Badge>
+  )
+}

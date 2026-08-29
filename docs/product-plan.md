@@ -55,18 +55,33 @@ This build follows the blueprint's phase shape but is scoped to what a
 demo needs. Phases after 1 are **not** built in this pass — see
 "Stopping point" below.
 
-| Phase | Focus | Demo-stage output |
-|---|---|---|
-| 0 | Discovery & foundation | This plan, ADRs, repo scaffold, domain schema, RBAC/audit skeleton |
-| 1 | Vertical slice | Registration → KYC → demo MT5 account, client + admin views, seed data |
-| 2 | Identity & KYC breadth | Full 2FA enforcement, session/device management, richer KYC review tooling |
-| 3 | Accounts, wallets & ledger | Real-account requests, wallets, ledger UI, transaction history |
-| 4 | Deposits & withdrawals | Simulated payment adapter, approvals, reconciliation queue |
-| 5 | Growth & service | Referrals, commissions, rebates, rankings, support tickets |
-| 6 | Hardening | Broader Playwright coverage, accessibility pass, perf, security review |
+| Phase | Focus                      | Status                                                                                                                              |
+| ----- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Discovery & foundation     | **Built** — this plan, ADRs, repo scaffold, domain schema, RBAC/audit skeleton                                                      |
+| 1     | Vertical slice             | **Built** — registration → KYC → demo MT5 account, client + admin views, seed data                                                  |
+| 2     | Identity & KYC breadth     | **Built** — TOTP enrolment, sign-in evidence, session revocation, case claiming, per-document review, risk flags                    |
+| 3     | Accounts, wallets & ledger | **Built** — live-account requests and provisioning, wallets, ledger and trial-balance UI, transaction history                       |
+| 4     | Deposits & withdrawals     | **Built** — simulated payment adapter, auto-credit threshold, maker-checker approvals, reversals, manual adjustments                |
+| 5     | Growth & service           | **Built** — IB programme, referral attribution, commissions, rebates, rank tiers, support tickets with threads                      |
+| 6     | Hardening                  | **Partial** — unit coverage across the domain layer; broader Playwright coverage and a formal accessibility/performance pass remain |
 
-**This engagement builds Phase 0 and Phase 1 only**, then stops for review,
-per the instruction not to implement the whole platform in one pass.
+All six phases are now implemented against simulated adapters. What is
+_not_ done is listed honestly in `docs/demo/walkthrough.md` section 7 —
+notably 2FA enforcement at sign-in, multi-currency FX, scheduled jobs, and
+end-to-end test breadth.
+
+Two rules survived the expansion unchanged, and are worth restating
+because they shape everything above:
+
+- **No mutable balance exists anywhere.** Client balances are folded from
+  `ledger_entries` on every read. The only path into that table is
+  `post_transaction()`, which rejects an unbalanced posting; a trigger
+  rejects any other insert, and any update or delete, for every role
+  including the service role.
+- **Every sensitive mutation calls `requirePermission(...)` and writes an
+  audit event.** The permission keys the server checks are the same keys
+  the RLS policies call `has_permission()` with, and the same keys the
+  admin console's role matrix edits.
 
 ## 4. Repository structure (proposed and applied)
 
@@ -118,7 +133,7 @@ Mirrors the blueprint's data-ownership rules, translated to Forex terms:
   private storage), decisions, reviewers, retention flags.
 - **Trading** — trading-account requests, MT5 identifiers, account
   snapshots. Does not own wallet balances — a trading account's
-  balance/equity/margin fields are a *snapshot* synced from the MT5
+  balance/equity/margin fields are a _snapshot_ synced from the MT5
   adapter, not a source of ledger truth.
 - **Finance** — wallets, ledger accounts, ledger entries, deposits,
   withdrawals, internal transfers, reconciliation state. Phase 3+.
@@ -185,7 +200,7 @@ notifications (slice 1, minimal)        profile_id, type, payload, read_at
 
 audit_events (slice 1)                  actor_id, actor_role, action, entity_type, entity_id,
                                          reason, correlation_id, before, after, created_at
-integration_events (slice 1)            adapter, event_type, request/response (typed), 
+integration_events (slice 1)            adapter, event_type, request/response (typed),
                                          idempotency_key, status — one row per adapter call
 ```
 
@@ -221,12 +236,19 @@ referrals/commissions, support tickets, staff role management UI,
 site/email settings. These are stubbed as "coming soon" admin nav items
 so the information architecture from the brief is visibly complete.
 
-## 8. Stopping point
+## 8. Current state
 
-Per the working method: this pass delivers Phase 0 (foundation) and
-Phase 1 (the vertical slice above), verified by `next build`, `eslint`,
-and Vitest unit tests that run in this environment, plus a Playwright
-spec for the critical journey (its live run requires a local Supabase
-stack — see `docs/testing/vertical-slice-report.md` for exactly what was
-and wasn't executed). Phases 2–6 are proposed next milestones, not built
-here.
+The build now covers the full workflow set above, against simulated
+adapters, verified by `npm run typecheck`, `npm run lint`, `npm test` and
+`npm run build`. `docs/demo/walkthrough.md` is the client-facing script,
+including a precise statement of what is simulated and what is not.
+
+Out of scope by design, and still so:
+
+- **Order execution, charts and open positions.** Those stay in MT5. This
+  platform is the account and operations layer around it.
+- **Real money movement.** No live payment provider, and none until there
+  is regulatory authorisation to match.
+- **A `live` integrations mode.** `INTEGRATIONS_MODE` must stay
+  `simulation`; there is deliberately no live branch to fall into by
+  accident (ADR 0005).

@@ -9,24 +9,33 @@ import { createAdminClient } from './lib/admin-client'
 
 const admin = createAdminClient()
 
+/**
+ * Child rows first, so foreign keys never block the wipe.
+ *
+ * ledger_entries and audit_events are deliberately absent: both are
+ * append-only at the database level (a trigger raises on UPDATE and
+ * DELETE), and this script must not be able to quietly punch a hole in
+ * that guarantee. They are cleared instead by deleting the auth users
+ * they hang off, which cascades — see deleteAllAuthUsers below — with the
+ * system-owned ledger rows removed by truncate in clearLedger().
+ */
 const TABLES_IN_DELETE_ORDER = [
   'support_ticket_messages',
   'support_tickets',
+  'client_notes',
   'commissions',
   'rebates',
   'referral_relationships',
   'introducing_brokers',
-  'ranks',
+  'commission_rules',
+  'withdrawal_approvals',
   'internal_transfers',
   'withdrawals',
   'deposits',
-  'ledger_entries',
-  'transactions',
-  'wallets',
-  'ledger_accounts',
   'notifications',
+  'login_events',
+  'user_mfa',
   'integration_events',
-  'audit_events',
   'kyc_documents',
   'kyc_cases',
   'trading_accounts',
@@ -34,9 +43,31 @@ const TABLES_IN_DELETE_ORDER = [
 ]
 
 async function deleteAllRows(table: string) {
-  const { error } = await admin.from(table).delete().not('id', 'is', null)
+  // user_mfa is keyed by profile_id rather than id.
+  const keyColumn = table === 'user_mfa' ? 'profile_id' : 'id'
+  const { error } = await admin.from(table).delete().not(keyColumn, 'is', null)
   if (error) throw new Error(`Failed to clear ${table}: ${error.message}`)
   console.log(`Cleared ${table}`)
+}
+
+/**
+ * Clears the append-only tables and the ledger scaffolding the only way
+ * the schema permits: TRUNCATE, run through a one-shot security-definer
+ * function, rather than by granting DELETE that would weaken the
+ * append-only guarantee for everything else. The system ledger accounts
+ * are re-created afterwards exactly as the migration created them.
+ */
+async function clearLedger() {
+  const { error } = await admin.rpc('reset_demo_ledger', {
+    p_confirmation: 'ERASE-DEMO-LEDGER',
+  })
+  if (error) {
+    throw new Error(
+      `Failed to clear the ledger: ${error.message}. ` +
+        'Run the migrations first — reset_demo_ledger() ships with them.',
+    )
+  }
+  console.log('Cleared ledger, transactions, wallets and audit history')
 }
 
 async function deleteAllAuthUsers() {
@@ -70,6 +101,7 @@ async function main() {
   }
   await clearKycDocumentsBucket()
   await deleteAllAuthUsers()
+  await clearLedger()
 
   console.log('\nReset complete. Reseeding…\n')
   await import('./seed')

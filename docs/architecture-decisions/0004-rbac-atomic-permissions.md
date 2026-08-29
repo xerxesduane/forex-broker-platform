@@ -41,6 +41,6 @@ checked server-side.
 - Adding a new staff capability means adding a permission string, wiring
   it into `role_permissions` for the right role(s), and calling
   `requirePermission` at the mutation site — not adding an `if (role ===
-  'admin')` check somewhere in a component.
+'admin')` check somewhere in a component.
 - Because RLS defaults deny, a forgotten policy fails closed (no rows
   returned / write rejected) instead of failing open.

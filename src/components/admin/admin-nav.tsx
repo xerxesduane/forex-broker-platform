@@ -4,6 +4,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Activity,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ChartNoAxesColumn,
+  Handshake,
   LayoutDashboard,
   LifeBuoy,
   Plug,
@@ -28,10 +32,34 @@ const NAV_ITEMS = [
     permission: PERMISSIONS.TRADING_ACCOUNT_VIEW,
   },
   {
+    href: '/admin/deposits',
+    label: 'Deposits',
+    icon: ArrowDownToLine,
+    permission: PERMISSIONS.DEPOSIT_VIEW,
+  },
+  {
+    href: '/admin/withdrawals',
+    label: 'Withdrawals',
+    icon: ArrowUpFromLine,
+    permission: PERMISSIONS.WITHDRAWAL_VIEW,
+  },
+  {
     href: '/admin/ledger',
     label: 'Wallets & ledger',
     icon: Wallet,
     permission: PERMISSIONS.LEDGER_VIEW,
+  },
+  {
+    href: '/admin/partners',
+    label: 'Partners & commissions',
+    icon: Handshake,
+    permission: PERMISSIONS.REFERRAL_MANAGE,
+  },
+  {
+    href: '/admin/reports',
+    label: 'Reports',
+    icon: ChartNoAxesColumn,
+    permission: PERMISSIONS.AUDIT_VIEW,
   },
   {
     href: '/admin/support',

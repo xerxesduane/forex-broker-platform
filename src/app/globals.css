@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -23,6 +23,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-seq-1: var(--chart-seq-1);
+  --color-chart-seq-2: var(--chart-seq-2);
+  --color-chart-seq-3: var(--chart-seq-3);
+  --color-chart-seq-4: var(--chart-seq-4);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -69,8 +74,22 @@
   --border: oklch(0.9 0.012 260);
   --input: oklch(0.9 0.012 260);
   --ring: oklch(0.7 0.11 87);
-  --chart-1: oklch(0.32 0.07 260);
-  --chart-2: oklch(0.8 0.13 87);
+  /* Categorical series colours. Deliberately only two: this pair is the
+     one that clears every check in the colour validator (lightness band,
+     chroma floor, CVD separation across all pairs, and 3:1 contrast on
+     this surface) in BOTH light and dark mode. Charts needing more than
+     two categories carry identity on the axis label and use the
+     single-hue sequential ramp below, rather than inventing a third hue
+     that two readers in a hundred cannot separate. */
+  --chart-1: #3e63b8; /* indigo — primary series */
+  --chart-2: #9c6e0a; /* ochre  — comparison series */
+  /* Sequential ramp, one hue light to dark, for magnitude. */
+  --chart-seq-1: oklch(0.86 0.05 258);
+  --chart-seq-2: oklch(0.74 0.09 258);
+  --chart-seq-3: oklch(0.6 0.12 258);
+  --chart-seq-4: oklch(0.44 0.13 258);
+  --chart-grid: oklch(0.9 0.012 260);
+  /* Kept for any shadcn primitive that still references them. */
   --chart-3: oklch(0.55 0.08 240);
   --chart-4: oklch(0.65 0.1 150);
   --chart-5: oklch(0.6 0.2 25);
@@ -104,8 +123,15 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.78 0.13 87);
-  --chart-1: oklch(0.78 0.09 250);
-  --chart-2: oklch(0.78 0.13 87);
+  /* Re-stepped for the dark surface and re-validated there — not an
+     automatic lightening of the light-mode pair. */
+  --chart-1: #6b8cd8;
+  --chart-2: #b8862a;
+  --chart-seq-1: oklch(0.38 0.07 258);
+  --chart-seq-2: oklch(0.5 0.1 258);
+  --chart-seq-3: oklch(0.63 0.12 258);
+  --chart-seq-4: oklch(0.76 0.1 258);
+  --chart-grid: oklch(1 0 0 / 14%);
   --chart-3: oklch(0.65 0.09 240);
   --chart-4: oklch(0.7 0.1 150);
   --chart-5: oklch(0.65 0.19 25);

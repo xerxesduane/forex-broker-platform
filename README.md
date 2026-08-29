@@ -41,11 +41,13 @@ cp .env.example .env.local
 
 **No Docker available?** Create a free project at
 [supabase.com/dashboard](https://supabase.com/dashboard/new), then:
+
 ```bash
 npx supabase login   # or set SUPABASE_ACCESS_TOKEN
 npx supabase link --project-ref <your-project-ref>
 npx supabase db push   # applies every file in supabase/migrations/
 ```
+
 Copy the project's URL/anon key/service_role key (Settings → API Keys)
 into `.env.local`, then skip to `npm run db:seed` below. This is exactly
 how the live demo's database (`aurion-markets-demo`) was set up.
@@ -95,18 +97,18 @@ is set in `.env.local`, so it can't fire by accident.
 
 Password for every seeded account: `AurionDemo!2026`
 
-| Role | Email |
-|---|---|
-| Super administrator | `ava.morgan@aurion-markets.example` |
-| KYC analyst | `noah.whitfield@aurion-markets.example` |
-| Finance operator | `priya.desai@aurion-markets.example` |
-| Finance approver | `marcus.oyelaran@aurion-markets.example` |
-| Support agent | `lena.brooks@aurion-markets.example` |
-| Client — not started | `jordan.ellery@demo.aurion-markets.test` |
-| Client — KYC in review | `priti.nakamura@demo.aurion-markets.test` |
-| Client — KYC approved, has a demo account | `samuel.reyes@demo.aurion-markets.test` |
-| Client — KYC approved, has a "real" account request | `imogen.hale@demo.aurion-markets.test` |
-| Client — KYC rejected | `daniel.kowalski@demo.aurion-markets.test` |
+| Role                                                | Email                                      |
+| --------------------------------------------------- | ------------------------------------------ |
+| Super administrator                                 | `ava.morgan@aurion-markets.example`        |
+| KYC analyst                                         | `noah.whitfield@aurion-markets.example`    |
+| Finance operator                                    | `priya.desai@aurion-markets.example`       |
+| Finance approver                                    | `marcus.oyelaran@aurion-markets.example`   |
+| Support agent                                       | `lena.brooks@aurion-markets.example`       |
+| Client — not started                                | `jordan.ellery@demo.aurion-markets.test`   |
+| Client — KYC in review                              | `priti.nakamura@demo.aurion-markets.test`  |
+| Client — KYC approved, has a demo account           | `samuel.reyes@demo.aurion-markets.test`    |
+| Client — KYC approved, has a "real" account request | `imogen.hale@demo.aurion-markets.test`     |
+| Client — KYC rejected                               | `daniel.kowalski@demo.aurion-markets.test` |
 
 Staff sign in at `/login` and land in `/admin`; clients land in `/portal`.
 
