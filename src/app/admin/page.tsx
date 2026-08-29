@@ -257,7 +257,7 @@ export default async function AdminDashboardPage() {
                 { name: 'Deposits credited', values: depositSeries, tone: 'primary' },
                 { name: 'Withdrawals paid', values: withdrawalSeries, tone: 'comparison' },
               ]}
-              format={(value) => formatAmount(value, 'USD')}
+              format="currency"
             />
           </CardContent>
         </Card>

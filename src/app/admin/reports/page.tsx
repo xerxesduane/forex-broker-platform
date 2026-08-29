@@ -16,6 +16,7 @@ import { PERMISSIONS } from '@/domain/rbac/permissions'
 import { formatAmount } from '@/domain/shared/money'
 import { requirePermission } from '@/lib/rbac/require-permission'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -181,9 +182,21 @@ export default async function AdminReportsPage() {
     ledgerBalances
       .filter((row) => row.kind === 'fee_income')
       .reduce((sum, row) => sum + Number(row.balance), 0) || 0
-  const clientLiability = ledgerBalances
-    .filter((row) => row.kind === 'client_wallet')
-    .reduce((sum, row) => sum + Number(row.balance), 0)
+  const sumKinds = (...kinds: string[]) =>
+    ledgerBalances
+      .filter((row) => kinds.includes(row.kind))
+      .reduce((sum, row) => sum + Number(row.balance), 0)
+
+  const clientLiability = sumKinds('client_wallet')
+  const houseBank = sumKinds('house')
+  const inClearing = sumKinds('clearing')
+  const payables = sumKinds('liability')
+  const brokerExpense = sumKinds('expense')
+  // Assets + expenses on one side, liabilities + income on the other. The
+  // gap is displayed rather than asserted: a balance sheet that only ever
+  // claims to reconcile is worth less than one that shows its own residual.
+  const reconciliationGap =
+    houseBank + inClearing + brokerExpense - (clientLiability + payables + feeIncome)
   const commissionCost = commissions
     .filter((c) => c.status === 'paid')
     .reduce((sum, c) => sum + Number(c.amount), 0)
@@ -227,7 +240,7 @@ export default async function AdminReportsPage() {
           <TrendChart
             labels={buckets.map((b) => b.label)}
             series={[{ name: 'Net flow', values: netFlowSeries, tone: 'primary' }]}
-            format={(value) => formatAmount(value, 'USD')}
+            format="currency"
             height={220}
           />
         </CardContent>
@@ -243,7 +256,7 @@ export default async function AdminReportsPage() {
             <TrendChart
               labels={buckets.map((b) => b.label)}
               series={[{ name: 'New clients', values: signupSeries, tone: 'primary' }]}
-              format={(value) => `${value}`}
+              format="number"
               height={180}
             />
           </CardContent>
@@ -288,7 +301,8 @@ export default async function AdminReportsPage() {
         <CardHeader>
           <CardTitle className="text-base">Balance sheet summary</CardTitle>
           <CardDescription>
-            Folded from the ledger. Client wallets are a liability; house and clearing are assets.
+            Folded from the ledger at read time. Assets and expenses on one side, what the
+            broker owes and has earned on the other — the two must meet exactly.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -308,31 +322,44 @@ export default async function AdminReportsPage() {
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell>House bank (asset)</TableCell>
+                  <TableCell>Withdrawals payable (liability)</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {formatAmount(
-                      ledgerBalances
-                        .filter((row) => row.kind === 'house')
-                        .reduce((sum, row) => sum + Number(row.balance), 0),
-                      'USD',
-                    )}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>In clearing (asset in transit)</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatAmount(
-                      ledgerBalances
-                        .filter((row) => row.kind === 'clearing')
-                        .reduce((sum, row) => sum + Number(row.balance), 0),
-                      'USD',
-                    )}
+                    {formatAmount(payables, 'USD')}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell>Fee income</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatAmount(feeIncome, 'USD')}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>House bank (asset)</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatAmount(houseBank, 'USD')}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>In clearing (asset in transit)</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatAmount(inClearing, 'USD')}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Broker expense (commissions, rebates, goodwill)</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatAmount(brokerExpense, 'USD')}
+                  </TableCell>
+                </TableRow>
+                <TableRow className="border-t-2 font-medium">
+                  <TableCell>Reconciliation gap</TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right tabular-nums',
+                      Math.abs(reconciliationGap) < 0.005 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                    )}
+                  >
+                    {formatAmount(reconciliationGap, 'USD')}
                   </TableCell>
                 </TableRow>
               </TableBody>

@@ -31,7 +31,7 @@ export function PortalNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="space-y-1">
+    <nav className="space-y-1" aria-label="Portal sections">
       {NAV_ITEMS.map((item) => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
         const Icon = item.icon
@@ -39,15 +39,19 @@ export function PortalNav() {
           <Link
             key={item.href}
             href={item.href}
+            aria-current={active ? 'page' : undefined}
             className={cn(
               'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               active
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
-            <Icon className="size-4" aria-hidden="true" />
-            {item.label}
+            <Icon
+              className={cn('size-4 shrink-0', active ? '' : 'opacity-80')}
+              aria-hidden="true"
+            />
+            <span className="truncate">{item.label}</span>
           </Link>
         )
       })}

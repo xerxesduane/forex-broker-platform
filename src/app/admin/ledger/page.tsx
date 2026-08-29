@@ -14,6 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  LedgerEntriesTable,
+  type LedgerEntryRow,
+} from '@/components/admin/ledger-entries-table'
 import { PERMISSIONS } from '@/domain/rbac/permissions'
 import { formatAmount } from '@/domain/shared/money'
 import { hasPermission, requirePermission } from '@/lib/rbac/require-permission'
@@ -27,6 +31,8 @@ const ACCOUNT_KIND_LABEL: Record<string, string> = {
   clearing: 'Clearing (asset in transit)',
   fee_income: 'Fee income',
   client_wallet: 'Client wallet (liability)',
+  liability: 'Payable (liability)',
+  expense: 'Broker expense',
 }
 
 type LedgerAccountBalance = {
@@ -45,7 +51,7 @@ type LedgerAccountBalance = {
 type EntryRow = {
   id: string
   transaction_id: string
-  direction: string
+  direction: 'debit' | 'credit'
   amount: number
   currency: string
   created_at: string
@@ -81,7 +87,10 @@ export default async function AdminLedgerPage() {
         'id, transaction_id, direction, amount, currency, created_at, compensates_entry_id, ledger_accounts!ledger_account_id(name, kind, key), transactions!transaction_id(type, status, external_ref)',
       )
       .order('created_at', { ascending: false })
-      .limit(60),
+      // Deliberately wider than the table shows. Corrections are appended,
+      // never merged, so a single repair can fill a whole page — pulling a
+      // deeper slice keeps every filter below it worth clicking.
+      .limit(300),
     supabase
       .from('profiles')
       .select('id, first_name, last_name, email')
@@ -103,13 +112,21 @@ export default async function AdminLedgerPage() {
     .filter((a) => a.kind === 'client_wallet')
     .sort((a, b) => Number(b.balance) - Number(a.balance))
 
-  const entries = ((entryRows ?? []) as unknown as EntryRow[]).map((row) => ({
-    ...row,
-    ledger_accounts: Array.isArray(row.ledger_accounts)
-      ? row.ledger_accounts[0]
-      : row.ledger_accounts,
-    transactions: Array.isArray(row.transactions) ? row.transactions[0] : row.transactions,
-  }))
+  const entries: LedgerEntryRow[] = ((entryRows ?? []) as unknown as EntryRow[]).map((row) => {
+    const account = Array.isArray(row.ledger_accounts) ? row.ledger_accounts[0] : row.ledger_accounts
+    const transaction = Array.isArray(row.transactions) ? row.transactions[0] : row.transactions
+    return {
+      id: row.id,
+      direction: row.direction,
+      amount: Number(row.amount),
+      currency: row.currency,
+      createdAt: row.created_at,
+      isCorrection: row.compensates_entry_id !== null,
+      transactionType: transaction?.type ?? null,
+      accountName: account?.name ?? null,
+      reference: transaction?.external_ref ?? null,
+    }
+  })
 
   const clientLiability = clientWallets.reduce((sum, w) => sum + Number(w.balance), 0)
   const feeIncome = systemAccounts
@@ -117,6 +134,9 @@ export default async function AdminLedgerPage() {
     .reduce((sum, a) => sum + Number(a.balance), 0)
   const clearing = systemAccounts
     .filter((a) => a.kind === 'clearing')
+    .reduce((sum, a) => sum + Number(a.balance), 0)
+  const payables = systemAccounts
+    .filter((a) => a.kind === 'liability')
     .reduce((sum, a) => sum + Number(a.balance), 0)
 
   const clients = (clientRows ?? []) as {
@@ -195,11 +215,16 @@ export default async function AdminLedgerPage() {
         )
       })}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label="Owed to clients"
           value={formatAmount(clientLiability, 'USD')}
           hint="sum of client wallets"
+        />
+        <StatTile
+          label="Withdrawals payable"
+          value={formatAmount(payables, 'USD')}
+          hint="approved, not yet paid"
         />
         <StatTile label="In clearing" value={formatAmount(clearing, 'USD')} hint="in transit" />
         <StatTile label="Fee income" value={formatAmount(feeIncome, 'USD')} hint="recognised" />
@@ -209,7 +234,9 @@ export default async function AdminLedgerPage() {
         <CardHeader>
           <CardTitle className="text-base">Chart of accounts</CardTitle>
           <CardDescription>
-            House accounts are debit-normal; client wallets and income are credit-normal.
+            Debit-normal: what the broker holds (house bank, clearing) and what it has spent
+            (broker expense). Credit-normal: what it owes (client wallets, payables) and what it
+            has earned (fee income).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -303,62 +330,15 @@ export default async function AdminLedgerPage() {
           <CardTitle className="text-base">Recent ledger entries</CardTitle>
           <CardDescription>
             Append-only. A correction is a new compensating row pointing at the entry it reverses —
-            never an edit.
+            never an edit, which is why corrections accumulate at the top rather than replacing
+            anything.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {entries.length === 0 ? (
             <p className="text-muted-foreground text-sm">No entries yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Account</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                        {new Date(entry.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {entry.transactions?.type?.replace('_', ' ') ?? '—'}
-                        </Badge>
-                        {entry.compensates_entry_id ? (
-                          <Badge variant="secondary" className="ml-1">
-                            reversal
-                          </Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="max-w-[16rem] truncate text-sm">
-                        {entry.ledger_accounts?.name ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-[14rem] truncate font-mono text-xs">
-                        {entry.transactions?.external_ref ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {entry.direction === 'debit'
-                          ? formatAmount(Number(entry.amount), entry.currency)
-                          : ''}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {entry.direction === 'credit'
-                          ? formatAmount(Number(entry.amount), entry.currency)
-                          : ''}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <LedgerEntriesTable entries={entries} />
           )}
         </CardContent>
       </Card>

@@ -11,11 +11,23 @@ export type TrendSeries = {
   tone: 'primary' | 'comparison'
 }
 
+/**
+ * How to render a value in the tooltip and the summary line.
+ *
+ * Deliberately a serializable descriptor, not a callback: this is a
+ * client component, and every caller is a server component. Passing a
+ * function across that boundary throws at request time — and a production
+ * build will not catch it, because it is a runtime constraint rather than
+ * a type error.
+ */
+export type TrendValueFormat = 'currency' | 'number'
+
 export type TrendChartProps = {
   labels: string[]
   series: TrendSeries[]
-  /** Formats a value for the tooltip and the y-axis extremes. */
-  format?: (value: number) => string
+  format?: TrendValueFormat
+  /** ISO currency code, used when format is 'currency'. */
+  currency?: string
   height?: number
   className?: string
   emptyMessage?: string
@@ -35,13 +47,19 @@ const PADDING = { top: 12, right: 12, bottom: 22, left: 12 }
 export function TrendChart({
   labels,
   series,
-  format = (value) => value.toLocaleString(),
+  format = 'number',
+  currency = 'USD',
   height = 200,
   className,
   emptyMessage = 'Not enough history yet.',
 }: TrendChartProps) {
   const gradientId = useId()
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  const formatValue = (value: number) =>
+    format === 'currency'
+      ? value.toLocaleString('en-US', { style: 'currency', currency })
+      : value.toLocaleString('en-US')
 
   const plotHeight = height - PADDING.top - PADDING.bottom
   const plotWidth = PLOT_WIDTH - PADDING.left - PADDING.right
@@ -216,7 +234,7 @@ export function TrendChart({
                   aria-hidden="true"
                 />
                 <span className="text-muted-foreground">{s.name}</span>
-                <span className="font-medium">{format(s.coords[activeIndex]?.value ?? 0)}</span>
+                <span className="font-medium">{formatValue(s.coords[activeIndex]?.value ?? 0)}</span>
               </p>
             ))}
           </div>
@@ -245,7 +263,7 @@ export function TrendChart({
                   <td className="py-1 pr-3">{label}</td>
                   {series.map((s) => (
                     <td key={s.name} className="py-1 pr-3 tabular-nums">
-                      {format(s.values[index] ?? 0)}
+                      {formatValue(s.values[index] ?? 0)}
                     </td>
                   ))}
                 </tr>
@@ -256,7 +274,7 @@ export function TrendChart({
       </details>
 
       <p className="text-muted-foreground text-[11px]">
-        Peak {format(max / 1.08)} · {labels.length} periods
+        Peak {formatValue(max / 1.08)} · {labels.length} periods
       </p>
     </div>
   )
