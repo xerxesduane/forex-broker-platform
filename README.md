@@ -105,6 +105,35 @@ see `supabase/seed/reset.ts` for exactly what it deletes and in what
 order) and reseeds. It refuses to run unless `ALLOW_DEMO_DATA_RESET=true`
 is set in `.env.local`, so it can't fire by accident.
 
+### Always create accounts through the Auth API, never with SQL
+
+`supabase/seed/seed.ts` creates every account with
+`auth.admin.createUser()`. That is deliberate, and worth knowing if you
+are ever tempted to insert into `auth.users` directly to save a round
+trip.
+
+Four columns on `auth.users` — `confirmation_token`, `recovery_token`,
+`email_change_token_new` and `email_change` — have no database default.
+A hand-written INSERT leaves them `NULL`, and GoTrue reads them into
+non-nullable Go strings, so the row fails to scan. The user looks
+perfectly correct in SQL (the bcrypt hash even verifies with
+`crypt()`), but every sign-in returns a flat _"Invalid login
+credentials"_ with no hint as to why.
+
+If you inherit a database in that state, the repair is:
+
+```sql
+update auth.users
+set confirmation_token         = coalesce(confirmation_token, ''),
+    recovery_token             = coalesce(recovery_token, ''),
+    email_change_token_new     = coalesce(email_change_token_new, ''),
+    email_change               = coalesce(email_change, ''),
+    email_change_token_current = coalesce(email_change_token_current, ''),
+    phone_change               = coalesce(phone_change, ''),
+    phone_change_token         = coalesce(phone_change_token, ''),
+    reauthentication_token     = coalesce(reauthentication_token, '');
+```
+
 ## Demo credentials
 
 Password for every seeded account: `AurionDemo!2026`
